@@ -68,7 +68,7 @@ struct Select(T) {
         }
 
         miniorm.query_ast.Select rval = query;
-        rval.orderBy = OrderBy(required, optional);
+        rval = OrderBy(required, optional);
         return Select!T(rval);
     }
 
@@ -77,7 +77,7 @@ struct Select(T) {
         import std.conv : to;
 
         miniorm.query_ast.Select rval = query;
-        rval.limit = Limit(Blob(value.to!string));
+        rval = Limit(Blob(value.to!string));
         return Select!T(rval);
     }
 
@@ -351,9 +351,9 @@ mixin template WhereMixin(T, QueryT, AstT) {
                 QueryT!T rval = value;
 
                 Where w = value.query.where.tryMatch!((Where v) => v);
-                WhereExpr we = w.tryMatch!((WhereExpr v) => v);
+                WhereExpr we = w.value.tryMatch!((WhereExpr v) => v);
                 we.optional ~= WhereExpr.Opt(op, Expr(condition));
-                rval.query.where = Where(we);
+                rval.query = Where(we);
                 return WhereOptional(rval);
             }
 
@@ -367,7 +367,7 @@ mixin template WhereMixin(T, QueryT, AstT) {
         }
 
         AstT rval = query;
-        rval.where = WhereExpr(Expr(condition)).Where;
+        rval = WhereExpr(Expr(condition)).Where;
 
         return WhereOptional(typeof(this)(rval));
     }

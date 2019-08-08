@@ -7,9 +7,9 @@ license "MIT"
 targetPath "build"
 targetType "library"
 
-dependency "d2sqlite3" version="~>0.18.1"
-dependency "sumtype" version="~>0.8.6"
-dependency "unit-threaded" version="~>0.9.3"
+dependency "d2sqlite3" version="~>0.18.3"
+dependency "sumtype" version="~>0.8.11"
+dependency "unit-threaded" version="~>0.10.3"
 
 configuration "with-lib" {
     subConfiguration "d2sqlite3" "with-lib"

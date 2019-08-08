@@ -158,6 +158,25 @@ struct Select {
     SumType!(None, OrderBy) orderBy;
     SumType!(None, Limit) limit;
 
+    void opAssign(From rhs) @safe pure nothrow @nogc
+    {
+        from = rhs.SumType!(None, From);
+    }
+
+    void opAssign(OrderBy rhs) @safe pure nothrow @nogc {
+        orderBy = rhs.SumType!(None, OrderBy);
+    }
+
+    void opAssign(Limit rhs) @safe pure nothrow @nogc
+    {
+        limit = rhs.SumType!(None, Limit);
+    }
+
+    void opAssign(Where rhs) @safe pure nothrow @nogc
+    {
+        where = rhs.SumType!(None, Where);
+    }
+
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "SELECT ");
         columns.toString(w);
@@ -218,7 +237,6 @@ struct From {
 
 struct Where {
     SumType!(None, WhereExpr) value;
-    alias value this;
     mixin(makeCtor!(typeof(value))("value"));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
@@ -536,6 +554,11 @@ struct Delete {
     TableRef table;
     SumType!(None, Where) where;
 
+    void opAssign(Where rhs) @safe pure nothrow @nogc
+    {
+        where = rhs.SumType!(None, Where);
+    }
+
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "DELETE FROM ");
         table.toString(w);
@@ -694,8 +717,8 @@ unittest {
     // arrange
     Select qblob, qtblRef, q;
     // act
-    qblob.from = Blob("foo").From;
-    qtblRef.from = TableOrSubQueries(TableOrQuery(TableRef("foo"))).From;
+    qblob = Blob("foo").From;
+    qtblRef = TableOrSubQueries(TableOrQuery(TableRef("foo"))).From;
     // assert
     immutable expected = "SELECT * FROM foo;";
     foreach (s; [qblob, qtblRef])
@@ -707,11 +730,11 @@ unittest {
     // arrange
     Select qblob, qAlias, qRef, qsubBlob;
     // act
-    qsubBlob.from = Blob("foo I dance").From;
-    qblob.from = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob))).From;
-    qAlias.from = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob,
+    qsubBlob = Blob("foo I dance").From;
+    qblob = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob))).From;
+    qAlias = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob,
             TableAlias("bar")))).From;
-    qRef.from = TableOrSubQueries(TableOrQuery(new TableOrSubQueries(TableRef("foo")
+    qRef = TableOrSubQueries(TableOrQuery(new TableOrSubQueries(TableRef("foo")
             .TableOrQuery, [TableRef("smurf").TableOrQuery]))).From;
     // assert
     // a subquery as a blob that should be represented as-is.
@@ -726,9 +749,9 @@ unittest {
 unittest {
     // arrange
     Select q;
-    q.from = Blob("foo").From;
+    q = Blob("foo").From;
     // act
-    q.orderBy = OrderBy(OrderingTerm(Blob("bar")));
+    q = OrderBy(OrderingTerm(Blob("bar")));
     // assert
     q.Query.Sql.toString.shouldEqual("SELECT * FROM foo ORDER BY bar;");
 }
@@ -738,8 +761,8 @@ unittest {
     // arrange
     Select q;
     // act
-    q.from = Blob("foo").From;
-    q.where = WhereExpr(Expr("foo = bar"), [
+    q = Blob("foo").From;
+    q = WhereExpr(Expr("foo = bar"), [
             WhereExpr.Opt(WhereOp.OR, Expr("batman NOT NULL"))
             ]).Where;
     // assert
@@ -770,7 +793,7 @@ unittest {
 unittest {
     // act
     Select s;
-    s.from = Blob("bar").From;
+    s = Blob("bar").From;
     auto q = Insert(InsertOpt.Insert, TableRef("foo"));
     q.values = InsertValues(s);
     // assert
@@ -781,9 +804,9 @@ unittest {
 unittest {
     // arrange
     Select q;
-    q.from = Blob("foo").From;
+    q = Blob("foo").From;
     // act
-    q.limit = Limit(Blob("10"), LimitOffset(Blob("42")));
+    q = Limit(Blob("10"), LimitOffset(Blob("42")));
     // assert
     q.Query.Sql.toString.shouldEqual("SELECT * FROM foo LIMIT 10 OFFSET 42;");
 }
