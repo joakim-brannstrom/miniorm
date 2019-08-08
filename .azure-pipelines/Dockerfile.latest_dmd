@@ -1,6 +1,12 @@
 # ubuntu_bionic_base
 FROM dlang2/dmd-ubuntu
 
+# Dependencies:
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install \
+        ca-certificates \
+        sqlite3 libsqlite3-dev
+
 WORKDIR /opt
 
 # fix_repo
