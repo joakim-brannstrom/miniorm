@@ -1,0 +1,13 @@
+# ubuntu_bionic_base
+FROM dlang2/dmd-ubuntu
+
+WORKDIR /opt
+
+# fix_repo
+COPY repo.tar.gz /opt
+RUN mkdir repo
+RUN tar xfz repo.tar.gz -C repo && rm repo.tar.gz
+
+# build_with_dub
+RUN cd repo && dub build
+RUN cd repo && dub test

@@ -1,5 +1,7 @@
 # Mini ORM for SQLite3
 
+[![Build Status](https://dev.azure.com/wikodes/wikodes/_apis/build/status/joakim-brannstrom.miniorm?branchName=master)](https://dev.azure.com/wikodes/wikodes/_build/latest?definitionId=7&branchName=master)
+
 This is a simple ORM layer for d2sqlite3.
 
 The architecture separate the database from the SQL tree construction. This is
