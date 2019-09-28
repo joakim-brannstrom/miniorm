@@ -158,24 +158,7 @@ struct Select {
     SumType!(None, OrderBy) orderBy;
     SumType!(None, Limit) limit;
 
-    void opAssign(From rhs) @safe pure nothrow @nogc
-    {
-        from = rhs.SumType!(None, From);
-    }
-
-    void opAssign(OrderBy rhs) @safe pure nothrow @nogc {
-        orderBy = rhs.SumType!(None, OrderBy);
-    }
-
-    void opAssign(Limit rhs) @safe pure nothrow @nogc
-    {
-        limit = rhs.SumType!(None, Limit);
-    }
-
-    void opAssign(Where rhs) @safe pure nothrow @nogc
-    {
-        where = rhs.SumType!(None, Where);
-    }
+    mixin(makeAssign!(typeof(this))(["columns", "from", "where", "orderBy", "limit"]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "SELECT ");
@@ -214,18 +197,21 @@ struct ResultColumn {
     SumType!(Star, ResultColumnExpr) value;
     mixin ToStringSumType!(value);
     mixin(makeCtor!(typeof(value))("value"));
+    mixin(makeAssign!(typeof(this))(["value"]));
 }
 
 struct ResultColumnExpr {
     SumType!(Blob, Query*) value;
     mixin ToStringSumType!value;
     mixin(makeCtor!(typeof(value))("value"));
+    mixin(makeAssign!(typeof(this))(["value"]));
 }
 
 struct From {
     SumType!(TableOrSubQueries, Blob) value;
     alias value this;
     mixin(makeCtor!(typeof(value))("value"));
+    mixin(makeAssign!(typeof(this))(["value"]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "FROM ");
@@ -237,7 +223,9 @@ struct From {
 
 struct Where {
     SumType!(None, WhereExpr) value;
+    alias value this;
     mixin(makeCtor!(typeof(value))("value"));
+    mixin(makeAssign!(typeof(this))(["value"]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         // TODO: should it quote strings?
@@ -274,6 +262,7 @@ enum WhereOp {
 struct TableOrSubQueries {
     TableOrQuery required;
     TableOrQuery[] optional;
+    mixin(makeAssign!(typeof(this))(["required", "optional"]));
 
     ///
     this(TableOrQuery r, TableOrQuery[] o = null) @safe pure nothrow @nogc {
@@ -294,6 +283,7 @@ struct TableOrQuery {
     SumType!(TableOrSubQuerySelect*, TableOrSubQueries*, TableRef, Blob) value;
     alias value this;
     mixin(makeCtor!(typeof(value))("value"));
+    mixin(makeAssign!(typeof(this))(["value"]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         value.match!((TableOrSubQuerySelect* v) { v.toString(w); }, (TableOrSubQueries* v) {
@@ -307,6 +297,7 @@ struct TableOrQuery {
 struct TableOrSubQuerySelect {
     Select select;
     TableAlias alias_;
+    mixin(makeAssign!(typeof(this))(["select", "alias_"]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "(");
@@ -319,6 +310,7 @@ struct TableOrSubQuerySelect {
 struct OrderBy {
     OrderingTerm required;
     OrderingTerm[] optional;
+    mixin(makeAssign!(typeof(this))(["required", "optional"]));
 
     this(typeof(required) r, typeof(optional) o = null) @safe pure nothrow @nogc {
         required = r;
@@ -338,8 +330,8 @@ struct OrderBy {
 struct OrderingTerm {
     SumType!(None, Blob) expr;
     SumType!(None, OrderingTermSort) sortTerm;
-
     mixin(makeCtor!(typeof(expr))("expr"));
+    mixin(makeAssign!(typeof(this))(["expr", "sortTerm"]));
 
     this(Blob expr, OrderingTermSort sortTerm) @safe pure nothrow @nogc {
         this.expr = expr;
@@ -363,8 +355,8 @@ enum OrderingTermSort {
 struct Limit {
     SumType!(None, Blob) expr;
     SumType!(None, LimitOffset, Blob) optional;
-
     mixin(makeCtor!(typeof(expr))("expr"));
+    mixin(makeAssign!(typeof(this))(["expr", "optional"]));
 
     this(Blob expr, LimitOffset l) @safe pure nothrow @nogc {
         this.expr = expr;
@@ -451,6 +443,7 @@ struct Insert {
 struct InsertColumns {
     SumType!(None, ColumnNames) value;
     mixin(makeCtor!(typeof(value))("value"));
+    mixin(makeAssign!(typeof(this))(["value"]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         value.match!((None v) {}, (ColumnNames v) => v.toString(w));
@@ -554,11 +547,6 @@ struct Delete {
     TableRef table;
     SumType!(None, Where) where;
 
-    void opAssign(Where rhs) @safe pure nothrow @nogc
-    {
-        where = rhs.SumType!(None, Where);
-    }
-
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "DELETE FROM ");
         table.toString(w);
@@ -633,6 +621,16 @@ alias None = Constant!(string.init);
 alias Star = Constant!"*";
 alias Window = Blob;
 
+/// A node representing a constant value.
+struct Constant(string s) {
+    string value = s;
+    alias value this;
+
+    void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
+        put(w, value);
+    }
+}
+
 private:
 
 /// Create a match that calls `.toString(w)` on all matches of the SumType.
@@ -672,6 +670,16 @@ string makeCtor(SumT)(string var) {
     return rval;
 }
 
+/// an opAssign that assign to `var` of type `SumT`.
+string makeAssign(T)(string[] members) {
+    string rval = format(`void opAssign(%1$s rhs) @trusted pure nothrow @nogc {`, T.stringof);
+    foreach (m; members) {
+        rval ~= format("%1$s = rhs.%1$s;", m);
+    }
+    rval ~= "}\n";
+    return rval;
+}
+
 /// Returns: a string that can be mixed in to create a setter for the member
 mixin template makeBuilder(members...) {
     static string buildMember(alias member)() {
@@ -692,19 +700,12 @@ mixin template makeBuilder(members...) {
     }
 }
 
-/// A node representing a constant value.
-struct Constant(string s) {
-    string value = s;
-    alias value this;
-
-    void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
-        put(w, value);
-    }
-}
-
 version (unittest) {
     import unit_threaded.assertions : shouldEqual;
 }
+
+// TODO: investigate why this is needed to be system.
+@system:
 
 @("shall convert a query at compile time to SQL")
 unittest {
@@ -717,8 +718,8 @@ unittest {
     // arrange
     Select qblob, qtblRef, q;
     // act
-    qblob = Blob("foo").From;
-    qtblRef = TableOrSubQueries(TableOrQuery(TableRef("foo"))).From;
+    qblob.from = Blob("foo").From;
+    qtblRef.from = TableOrSubQueries(TableOrQuery(TableRef("foo"))).From;
     // assert
     immutable expected = "SELECT * FROM foo;";
     foreach (s; [qblob, qtblRef])
@@ -730,11 +731,11 @@ unittest {
     // arrange
     Select qblob, qAlias, qRef, qsubBlob;
     // act
-    qsubBlob = Blob("foo I dance").From;
-    qblob = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob))).From;
-    qAlias = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob,
+    qsubBlob.from = Blob("foo I dance").From;
+    qblob.from = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob))).From;
+    qAlias.from = TableOrSubQueries(TableOrQuery(new TableOrSubQuerySelect(qsubBlob,
             TableAlias("bar")))).From;
-    qRef = TableOrSubQueries(TableOrQuery(new TableOrSubQueries(TableRef("foo")
+    qRef.from = TableOrSubQueries(TableOrQuery(new TableOrSubQueries(TableRef("foo")
             .TableOrQuery, [TableRef("smurf").TableOrQuery]))).From;
     // assert
     // a subquery as a blob that should be represented as-is.
@@ -749,9 +750,9 @@ unittest {
 unittest {
     // arrange
     Select q;
-    q = Blob("foo").From;
+    q.from = Blob("foo").From;
     // act
-    q = OrderBy(OrderingTerm(Blob("bar")));
+    q.orderBy = OrderBy(OrderingTerm(Blob("bar")));
     // assert
     q.Query.Sql.toString.shouldEqual("SELECT * FROM foo ORDER BY bar;");
 }
@@ -761,8 +762,8 @@ unittest {
     // arrange
     Select q;
     // act
-    q = Blob("foo").From;
-    q = WhereExpr(Expr("foo = bar"), [
+    q.from = Blob("foo").From;
+    q.where = WhereExpr(Expr("foo = bar"), [
             WhereExpr.Opt(WhereOp.OR, Expr("batman NOT NULL"))
             ]).Where;
     // assert
@@ -793,7 +794,7 @@ unittest {
 unittest {
     // act
     Select s;
-    s = Blob("bar").From;
+    s.from = Blob("bar").From;
     auto q = Insert(InsertOpt.Insert, TableRef("foo"));
     q.values = InsertValues(s);
     // assert
@@ -804,9 +805,9 @@ unittest {
 unittest {
     // arrange
     Select q;
-    q = Blob("foo").From;
+    q.from = Blob("foo").From;
     // act
-    q = Limit(Blob("10"), LimitOffset(Blob("42")));
+    q.limit = Limit(Blob("10"), LimitOffset(Blob("42")));
     // assert
     q.Query.Sql.toString.shouldEqual("SELECT * FROM foo LIMIT 10 OFFSET 42;");
 }

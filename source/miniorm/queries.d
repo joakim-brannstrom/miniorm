@@ -49,7 +49,7 @@ struct Select(T) {
     }
 
     /// Order the result by `s` in the order the fields are defined in `T`.
-    auto orderBy(OrderingTermSort s, string[] fields = null) @safe pure {
+    auto orderBy(OrderingTermSort s, string[] fields = null) @trusted pure {
         OrderingTerm required;
         OrderingTerm[] optional;
 
@@ -68,16 +68,16 @@ struct Select(T) {
         }
 
         miniorm.query_ast.Select rval = query;
-        rval = OrderBy(required, optional);
+        rval.orderBy = OrderBy(required, optional);
         return Select!T(rval);
     }
 
     /// Limit the query to this number of answers
-    auto limit(long value) @safe pure {
+    auto limit(long value) @trusted pure {
         import std.conv : to;
 
         miniorm.query_ast.Select rval = query;
-        rval = Limit(Blob(value.to!string));
+        rval.limit = Limit(Blob(value.to!string));
         return Select!T(rval);
     }
 
@@ -338,22 +338,22 @@ mixin template WhereMixin(T, QueryT, AstT) {
     }
 
     /// Add a WHERE condition.
-    auto where(string condition) @safe pure {
+    auto where(string condition) @trusted pure {
         import miniorm.query_ast;
 
         static struct WhereOptional {
             QueryT!T value;
             alias value this;
 
-            private auto where(string condition, WhereOp op) @safe pure {
+            private auto where(string condition, WhereOp op) @trusted pure {
                 import sumtype;
 
                 QueryT!T rval = value;
 
                 Where w = value.query.where.tryMatch!((Where v) => v);
-                WhereExpr we = w.value.tryMatch!((WhereExpr v) => v);
+                WhereExpr we = w.tryMatch!((WhereExpr v) => v);
                 we.optional ~= WhereExpr.Opt(op, Expr(condition));
-                rval.query = Where(we);
+                rval.query.where = Where(we);
                 return WhereOptional(rval);
             }
 
@@ -367,7 +367,7 @@ mixin template WhereMixin(T, QueryT, AstT) {
         }
 
         AstT rval = query;
-        rval = WhereExpr(Expr(condition)).Where;
+        rval.where = WhereExpr(Expr(condition)).Where;
 
         return WhereOptional(typeof(this)(rval));
     }
