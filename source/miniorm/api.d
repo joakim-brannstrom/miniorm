@@ -51,6 +51,11 @@ struct Miniorm {
         cleanupCache;
     }
 
+    /// Start a RAII handled transaction.
+    Transaction begin() {
+        return Transaction(this);
+    }
+
     /// Toggle logging.
     void log(bool v) {
         this.log_ = v;
@@ -488,5 +493,50 @@ auto spinSql(alias query, alias logFn = logger.warning)() nothrow {
             return spinSql!(query, logFn)(Duration.max);
         } catch (Exception e) {
         }
+    }
+}
+
+/** Sleep for a random time that is min_ + rnd(0, span).
+ *
+ * Params:
+ *  span = unit is msecs.
+ */
+void rndSleep(Duration min_, ulong span) nothrow @trusted {
+    import core.thread : Thread;
+    import core.time : dur;
+    import std.random : uniform;
+
+    auto t_span = () {
+        try {
+            return uniform(0, span).dur!"msecs";
+        } catch (Exception e) {
+        }
+        return span.dur!"msecs";
+    }();
+
+    Thread.sleep(min_ + t_span);
+}
+
+/// RAII handling of a transaction.
+struct Transaction {
+    Miniorm db;
+    bool isDone;
+
+    this(Miniorm db) {
+        this.db = db;
+        spinSql!(() { db.begin; });
+    }
+
+    ~this() {
+        scope (exit)
+            isDone = true;
+        if (!isDone)
+            db.rollback;
+    }
+
+    void commit() {
+        scope (exit)
+            isDone = true;
+        db.commit;
     }
 }
