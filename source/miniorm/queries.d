@@ -49,7 +49,7 @@ struct Select(T) {
     }
 
     /// Order the result by `s` in the order the fields are defined in `T`.
-    auto orderBy(OrderingTermSort s, string[] fields = null) @safe pure {
+    auto orderBy(OrderingTermSort s, string[] fields = null) @trusted pure {
         OrderingTerm required;
         OrderingTerm[] optional;
 
@@ -73,7 +73,7 @@ struct Select(T) {
     }
 
     /// Limit the query to this number of answers
-    auto limit(long value) @safe pure {
+    auto limit(long value) @trusted pure {
         import std.conv : to;
 
         miniorm.query_ast.Select rval = query;
@@ -338,14 +338,14 @@ mixin template WhereMixin(T, QueryT, AstT) {
     }
 
     /// Add a WHERE condition.
-    auto where(string condition) @safe pure {
+    auto where(string condition) @trusted pure {
         import miniorm.query_ast;
 
         static struct WhereOptional {
             QueryT!T value;
             alias value this;
 
-            private auto where(string condition, WhereOp op) @safe pure {
+            private auto where(string condition, WhereOp op) @trusted pure {
                 import sumtype;
 
                 QueryT!T rval = value;
