@@ -203,9 +203,16 @@ struct Miniorm {
 
         const sql = q.toSql.toString;
 
-        if (sql !in cachedStmt)
-            cachedStmt[sql] = db.prepare(sql);
-        auto stmt = cachedStmt[sql];
+        auto stmt = () {
+            if (auto v = sql in cachedStmt) {
+                (*v).reset;
+                return *v;
+            } else {
+                auto r = db.prepare(sql);
+                cachedStmt[sql] = r;
+                return r;
+            }
+        }();
 
         static if (all == AggregateInsert.yes) {
             int n;
