@@ -120,6 +120,10 @@ auto insertOrReplace(T)() {
     return Insert!T(tableName!T).insertOrReplace;
 }
 
+auto insertOrIgnore(T)() {
+    return Insert!T(tableName!T).insertOrIgnore;
+}
+
 struct Insert(T) {
     import miniorm.query_ast;
 
@@ -192,6 +196,10 @@ struct Insert(T) {
         return op(InsertOpt.InsertOrReplace).setColumns(false);
     }
 
+    auto insertOrIgnore() @safe pure nothrow const {
+        return op(InsertOpt.InsertOrIgnore).setColumns(false);
+    }
+
     // TODO the name is bad.
     /// Specify columns to insert/replace values in.
     private auto setColumns(bool insert_) @safe pure const {
@@ -235,6 +243,9 @@ unittest {
     insertOrReplace!Foo.values(2).toSql.toString.shouldEqual(
             "INSERT OR REPLACE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
 
+    insertOrIgnore!Foo.values(2).toSql.toString.shouldEqual(
+            "INSERT OR IGNORE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
+
     insert!Foo.values(2).toSql.toString.shouldEqual(
             "INSERT INTO Foo ('text','val','ts','version') VALUES (?,?,?,?),(?,?,?,?);");
 }
@@ -255,6 +266,8 @@ unittest {
 
     insertOrReplace!Bar.values(1).toSql.toString.shouldEqual(
             "INSERT OR REPLACE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
+    insertOrIgnore!Bar.values(1).toSql.toString.shouldEqual(
+            "INSERT OR IGNORE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
     insert!Bar.values(1).toSql.toString.shouldEqual(
             "INSERT INTO Bar ('value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?);");
     insert!Bar.values(3).toSql.toString.shouldEqual(

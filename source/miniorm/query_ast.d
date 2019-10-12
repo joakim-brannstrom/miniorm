@@ -158,7 +158,9 @@ struct Select {
     SumType!(None, OrderBy) orderBy;
     SumType!(None, Limit) limit;
 
-    mixin(makeAssign!(typeof(this))(["columns", "from", "where", "orderBy", "limit"]));
+    mixin(makeAssign!(typeof(this))([
+                "columns", "from", "where", "orderBy", "limit"
+            ]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "SELECT ");
