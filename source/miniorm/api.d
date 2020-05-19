@@ -25,15 +25,16 @@ version (unittest) {
 
 ///
 struct Miniorm {
-    private Statement[string] cachedStmt;
+    private LentCntStatement[string] cachedStmt;
+    private size_t cacheSize = 128;
     /// True means that all queries are logged.
     private bool log_;
 
     ///
-    Database db;
+    private Database db;
     alias getUnderlyingDb this;
 
-    ref Database getUnderlyingDb() {
+    ref Database getUnderlyingDb() return  {
         return db;
     }
 
@@ -53,7 +54,35 @@ struct Miniorm {
 
     /// Start a RAII handled transaction.
     Transaction transaction() {
-        return Transaction(this);
+        return Transaction(db);
+    }
+
+    void prepareCacheSize(size_t s) {
+        cacheSize = s;
+    }
+
+    RefCntStatement prepare(string sql) {
+        if (cachedStmt.length > cacheSize) {
+            auto keys = appender!(string[])();
+            foreach (p; cachedStmt.byKeyValue) {
+                // the statement is currently not lent to any user.
+                if (p.value.count == 0) {
+                    keys.put(p.key);
+                }
+            }
+
+            foreach (k; keys.data) {
+                cachedStmt[k].stmt.finalize;
+                cachedStmt.remove(k);
+            }
+        }
+
+        if (auto v = sql in cachedStmt) {
+            return RefCntStatement(*v);
+        }
+        auto r = db.prepare(sql);
+        cachedStmt[sql] = LentCntStatement(r);
+        return RefCntStatement(cachedStmt[sql]);
     }
 
     /// Toggle logging.
@@ -67,8 +96,9 @@ struct Miniorm {
     }
 
     private void cleanupCache() {
-        foreach (ref s; cachedStmt.byValue)
-            s.finalize;
+        foreach (ref s; cachedStmt.byValue) {
+            s.stmt.finalize;
+        }
         cachedStmt = null;
     }
 
@@ -78,8 +108,9 @@ struct Miniorm {
     }
 
     void run(string sql, bool delegate(ResultRange) dg = null) {
-        if (isLog)
+        if (isLog) {
             logger.trace(sql);
+        }
         db.run(sql, dg);
     }
 
@@ -88,32 +119,38 @@ struct Miniorm {
         db.close();
     }
 
-    size_t run(T)(Count!T v) {
+    size_t run(T, Args...)(Count!T v, auto ref Args args) {
         const sql = v.toSql.toString;
-        if (isLog)
+        if (isLog) {
             logger.trace(sql);
-        return db.executeCheck(sql).front.front.as!size_t;
+        }
+        auto stmt = prepare(sql);
+        return executeCheck(stmt, sql, v.binds, args).front.front.as!size_t;
     }
 
-    auto run(T)(Select!T v) {
+    auto run(T, Args...)(Select!T v, auto ref Args args) {
         import std.algorithm : map;
         import std.format : format;
         import std.range : inputRangeObject;
 
         const sql = v.toSql.toString;
-        if (isLog)
+        if (isLog) {
             logger.trace(sql);
+        }
 
-        auto result = db.executeCheck(sql);
+        auto stmt = prepare(sql);
+        auto result = executeCheck(stmt, sql, v.binds, args);
 
         static T qconv(typeof(result.front) e) {
+            import std.algorithm : min;
+            import std.conv : to;
+            import std.traits : isStaticArray, OriginalType;
+            import miniorm.api : fromSqLiteDateTime;
             import miniorm.schema : fieldToCol;
 
             T ret;
             static string rr() {
                 string[] res;
-                res ~= "import std.traits : isStaticArray, OriginalType;";
-                res ~= "import miniorm.api : fromSqLiteDateTime;";
                 foreach (i, a; fieldToCol!("", T)()) {
                     res ~= `{`;
                     if (a.columnType == "DATETIME") {
@@ -124,7 +161,6 @@ struct Miniorm {
                         res ~= q{static if (isStaticArray!ET)};
                         res ~= `
                             {
-                                import std.algorithm : min;
                                 auto ubval = e[%2$d].as!(ubyte[]);
                                 auto etval = cast(typeof(ET.init[]))ubval;
                                 auto ln = min(ret.%1$s.length, etval.length);
@@ -132,7 +168,8 @@ struct Miniorm {
                             }
                             `.format(a.identifier, i);
                         res ~= q{else static if (is(ET == enum))};
-                        res ~= format(q{ret.%1$s = cast(ET) e.peek!ET(%2$d);}, a.identifier, i);
+                        res ~= format(q{ret.%1$s = cast(ET) e.peek!ET(%2$d).to!ET;},
+                                a.identifier, i);
                         res ~= q{else};
                         res ~= format(q{ret.%1$s = e.peek!ET(%2$d);}, a.identifier, i);
                     }
@@ -145,28 +182,27 @@ struct Miniorm {
             return ret;
         }
 
-        return result.map!qconv;
+        return ResultRange2!(typeof(result))(stmt, result).map!qconv;
     }
 
-    void run(T)(Delete!T v) {
+    void run(T, Args...)(Delete!T v, auto ref Args args) {
         const sql = v.toSql.toString;
-        if (isLog)
+        if (isLog) {
             logger.trace(sql);
-        db.run(sql);
+        }
+        auto stmt = prepare(sql);
+        executeCheck(stmt, sql, v.binds, args);
     }
 
-    void run(AggregateInsert all = AggregateInsert.no, T0, T1)(Insert!T0 v, T1[] arr...)
-            if (!isInputRange!T1) {
-        procInsert!all(v, arr);
+    void run(T0, T1)(Insert!T0 v, T1[] arr...) if (!isInputRange!T1) {
+        procInsert(v, arr);
     }
 
-    void run(AggregateInsert all = AggregateInsert.no, T, R)(Insert!T v, R rng)
-            if (isInputRange!R) {
-        procInsert!all(v, rng);
+    void run(T, R)(Insert!T v, R rng) if (isInputRange!R) {
+        procInsert(v, rng);
     }
 
-    private void procInsert(AggregateInsert all = AggregateInsert.no, T, R)(Insert!T q, R rng)
-            if ((all && hasLength!R) || !all) {
+    private void procInsert(T, R)(Insert!T q, R rng) {
         import std.algorithm : among;
 
         // generate code for binding values in a struct to a prepared
@@ -184,9 +220,9 @@ struct Miniorm {
                 if (!replace && v.isPrimaryKey)
                     continue;
                 if (v.columnType == "DATETIME")
-                    s ~= "stmt.bind(n+1, v." ~ v.identifier ~ ".toUTC.toSqliteDateTime);";
+                    s ~= "stmt.get.bind(n+1, v." ~ v.identifier ~ ".toUTC.toSqliteDateTime);";
                 else
-                    s ~= "stmt.bind(n+1, v." ~ v.identifier ~ ");";
+                    s ~= "stmt.get.bind(n+1, v." ~ v.identifier ~ ");";
                 s ~= "++n;";
             }
             return s;
@@ -196,50 +232,24 @@ struct Miniorm {
 
         const replace = q.query.opt == InsertOpt.InsertOrReplace;
 
-        static if (all == AggregateInsert.yes)
-            q = q.values(rng.length);
-        else
-            q = q.values(1);
+        q = q.values(1);
 
         const sql = q.toSql.toString;
 
-        auto stmt = () {
-            if (auto v = sql in cachedStmt) {
-                (*v).reset;
-                return *v;
-            } else {
-                auto r = db.prepare(sql);
-                cachedStmt[sql] = r;
-                return r;
-            }
-        }();
+        auto stmt = prepare(sql);
 
-        static if (all == AggregateInsert.yes) {
+        foreach (v; rng) {
             int n;
-            foreach (v; rng) {
-                if (replace) {
-                    mixin(genBinding!T(true));
-                } else {
-                    mixin(genBinding!T(false));
-                }
+            if (replace) {
+                mixin(genBinding!T(true));
+            } else {
+                mixin(genBinding!T(false));
             }
-            if (isLog)
-                logger.trace(sql, " -> ", rng);
-            stmt.execute();
-            stmt.reset();
-        } else {
-            foreach (v; rng) {
-                int n;
-                if (replace) {
-                    mixin(genBinding!T(true));
-                } else {
-                    mixin(genBinding!T(false));
-                }
-                if (isLog)
-                    logger.trace(sql, " -> ", v);
-                stmt.execute();
-                stmt.reset();
+            if (isLog) {
+                logger.trace(sql, " -> ", v);
             }
+            stmt.get.execute();
+            stmt.get.reset();
         }
     }
 }
@@ -283,11 +293,10 @@ unittest {
         string text;
     }
 
-    import std.experimental.allocator;
-    import std.experimental.allocator.mallocator;
-    import std.experimental.allocator.building_blocks.scoped_allocator;
-
     // TODO: fix this
+    //import std.experimental.allocator;
+    //import std.experimental.allocator.mallocator;
+    //import std.experimental.allocator.building_blocks.scoped_allocator;
     //Microrm* db;
     //ScopedAllocator!Mallocator scalloc;
     //db = scalloc.make!Microrm(":memory:");
@@ -349,8 +358,7 @@ unittest {
     db.run(buildSchema!One);
 
     db.run(count!One).shouldEqual(0);
-    db.run!(AggregateInsert.yes)(insert!One.insert, iota(0, 10)
-            .map!(i => One(i * 100, "hello" ~ text(i))));
+    db.run(insert!One.insert, iota(0, 10).map!(i => One(i * 100, "hello" ~ text(i))));
     db.run(count!One).shouldEqual(10);
 
     auto ones = db.run(select!One).array;
@@ -364,8 +372,7 @@ unittest {
     import std.datetime;
     import std.conv : to;
 
-    db.run!(AggregateInsert.yes)(insertOrReplace!One, iota(0, 499)
-            .map!(i => One((i + 1) * 100, "hello" ~ text(i))));
+    db.run(insertOrReplace!One, iota(0, 499).map!(i => One((i + 1) * 100, "hello" ~ text(i))));
     ones = db.run(select!One).array;
     assert(ones.length == 499);
     assert(ones.all!(a => a.id >= 100));
@@ -419,9 +426,12 @@ unittest {
     db.run(insertOrReplace!Settings, Settings(12, Limits(Limit(0, 12), Limit(-12, 12))));
 
     assert(db.run(count!Settings) == 3);
-    assert(db.run(count!Settings.where(`"limits.volt.max" = 2`)) == 1);
-    assert(db.run(count!Settings.where(`"limits.volt.max" > 10`)) == 2);
-    db.run(delete_!Settings.where(`"limits.volt.max" < 10`));
+    assert(db.run(count!Settings.where(`"limits.volt.max" = :nr`, Bind("nr")), 2) == 1);
+    assert(db.run(count!Settings.where(`"limits.volt.max" > :nr`, Bind("nr")), 10) == 2);
+    db.run(count!Settings.where(`"limits.volt.max" > :nr`, Bind("nr"))
+            .and(`"limits.volt.max" < :topnr`, Bind("topnr")), 1, 12).shouldEqual(2);
+
+    db.run(delete_!Settings.where(`"limits.volt.max" < :nr`, Bind("nr")), 10);
     assert(db.run(count!Settings) == 2);
 }
 
@@ -477,20 +487,22 @@ class SpinSqlTimeout : Exception {
  *
  * Note: If there are any errors in the query it will go into an infinite loop.
  */
-auto spinSql(alias query, alias logFn = logger.warning)(Duration timeout,
-        Duration minTime = 50.dur!"msecs", Duration maxTime = 150.dur!"msecs") {
+auto spinSql(alias query, alias logFn = logger.warning)(Duration timeout, Duration minTime = 50.dur!"msecs",
+        Duration maxTime = 150.dur!"msecs", const string file = __FILE__, const size_t line = __LINE__) {
     import core.thread : Thread;
     import std.datetime.stopwatch : StopWatch, AutoStart;
     import std.exception : collectException;
+    import std.format : format;
     import std.random : uniform;
 
     const sw = StopWatch(AutoStart.yes);
+    const location = format!" [%s:%s]"(file, line);
 
     while (sw.peek < timeout) {
         try {
             return query();
         } catch (Exception e) {
-            logFn(e.msg).collectException;
+            logFn(e.msg, location).collectException;
             // even though the database have a builtin sleep it still result in too much spam.
             () @trusted {
                 Thread.sleep(uniform(minTime.total!"msecs", maxTime.total!"msecs").dur!"msecs");
@@ -501,10 +513,12 @@ auto spinSql(alias query, alias logFn = logger.warning)(Duration timeout,
     throw new SpinSqlTimeout(null);
 }
 
-auto spinSql(alias query, alias logFn = logger.warning)() nothrow {
+auto spinSql(alias query, alias logFn = logger.warning)(const string file = __FILE__,
+        const size_t line = __LINE__) nothrow {
     while (true) {
         try {
-            return spinSql!(query, logFn)(Duration.max);
+            return spinSql!(query, logFn)(Duration.max, 50.dur!"msecs",
+                    150.dur!"msecs", file, line);
         } catch (Exception e) {
         }
     }
@@ -512,24 +526,149 @@ auto spinSql(alias query, alias logFn = logger.warning)() nothrow {
 
 /// RAII handling of a transaction.
 struct Transaction {
-    Miniorm db;
-    bool isDone;
+    Database db;
+
+    // can only do a rollback/commit if it has been constructed and thus
+    // executed begin.
+    enum State {
+        none,
+        rollback,
+        done,
+    }
+
+    State st;
 
     this(Miniorm db) {
+        this(db.db);
+    }
+
+    this(Database db) {
         this.db = db;
         spinSql!(() { db.begin; });
+        st = State.rollback;
     }
 
     ~this() {
         scope (exit)
-            isDone = true;
-        if (!isDone)
+            st = State.done;
+        if (st == State.rollback) {
             db.rollback;
+        }
     }
 
     void commit() {
-        scope (exit)
-            isDone = true;
         db.commit;
+        st = State.done;
+    }
+
+    void rollback() {
+        scope (exit)
+            st = State.done;
+        if (st == State.rollback) {
+            db.rollback;
+        }
+    }
+}
+
+/// A prepared statement is lent to the user. The refcnt takes care of
+/// resetting the statement when the user is done with it.
+struct RefCntStatement {
+    import std.exception : collectException;
+    import std.typecons : RefCounted, RefCountedAutoInitialize, refCounted;
+
+    static struct Payload {
+        LentCntStatement* stmt;
+
+        this(LentCntStatement* stmt) {
+            this.stmt = stmt;
+            stmt.count++;
+        }
+
+        ~this() nothrow {
+            if (stmt is null)
+                return;
+
+            try {
+                (*stmt).stmt.clearBindings;
+                (*stmt).stmt.reset;
+            } catch (Exception e) {
+            }
+            stmt.count--;
+            stmt = null;
+        }
+    }
+
+    RefCounted!(Payload, RefCountedAutoInitialize.no) rc;
+
+    this(ref LentCntStatement stmt) @trusted {
+        rc = Payload(&stmt);
+    }
+
+    ref Statement get() {
+        return rc.refCountedPayload.stmt.stmt;
+    }
+}
+
+struct ResultRange2(T) {
+    RefCntStatement stmt;
+    T result;
+
+    auto front() {
+        assert(!empty, "Can't get front of an empty range");
+        return result.front;
+    }
+
+    void popFront() {
+        assert(!empty, "Can't pop front of an empty range");
+        result.popFront;
+    }
+
+    bool empty() {
+        return result.empty;
+    }
+}
+
+/// It is lent to a user and thus can't be finalized if the counter > 0.
+private struct LentCntStatement {
+    Statement stmt;
+    long count;
+}
+
+@("shall remove all statements that are not lent to a user when the cache is full")
+unittest {
+    struct Settings {
+        ulong id;
+    }
+
+    auto db = Miniorm(":memory:");
+    db.run(buildSchema!Settings);
+    db.prepareCacheSize = 1;
+
+    { // reuse statement
+        auto s0 = db.prepare("select * from Settings");
+        auto s1 = db.prepare("select * from Settings");
+
+        db.cachedStmt.length.shouldEqual(1);
+        db.cachedStmt["select * from Settings"].count.shouldEqual(2);
+    }
+    db.cachedStmt.length.shouldEqual(1);
+    db.cachedStmt["select * from Settings"].count.shouldEqual(0);
+
+    { // a lent statement is not removed when the cache is full
+        auto s0 = db.prepare("select * from Settings");
+        auto s1 = db.prepare("select id from Settings");
+
+        db.cachedStmt.length.shouldEqual(2);
+        ("select * from Settings" in db.cachedStmt).shouldBeTrue;
+        ("select id from Settings" in db.cachedStmt).shouldBeTrue;
+    }
+    db.cachedStmt.length.shouldEqual(2);
+
+    { // statements not lent to a user is removed when the cache is full
+        auto s0 = db.prepare("select * from Settings");
+
+        db.cachedStmt.length.shouldEqual(1);
+        ("select * from Settings" in db.cachedStmt).shouldBeTrue;
+        ("select id from Settings" in db.cachedStmt).shouldBeFalse;
     }
 }
