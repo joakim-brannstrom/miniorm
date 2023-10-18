@@ -8,7 +8,7 @@ targetPath "build"
 targetType "library"
 
 dependency "d2sqlite3" version="~>1.0.0"
-dependency "unit-threaded" version="~>2.0.3"
+dependency "unit-threaded" version="~>2.1.7"
 
 configuration "with-lib" {
     subConfiguration "d2sqlite3" "with-lib"
