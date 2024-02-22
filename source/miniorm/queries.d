@@ -95,7 +95,7 @@ unittest {
 
     select!Foo.where("foo = :bar", Bind("bar")).or("batman IS NULL")
         .and("batman = :hero", Bind("hero")).toSql.toString.shouldEqual(
-                "SELECT * FROM Foo WHERE foo = :bar OR batman IS NULL AND batman = :hero;");
+            "SELECT * FROM Foo WHERE foo = :bar OR batman IS NULL AND batman = :hero;");
 }
 
 @("shall be possible to have a member of enum type")
@@ -328,7 +328,6 @@ struct Delete(T) {
 }
 
 mixin template WhereMixin(T, QueryT, AstT) {
-    import std.datetime : SysTime;
     import std.traits : isNumeric, isSomeString;
 
     Bind[] binds;
@@ -344,7 +343,7 @@ mixin template WhereMixin(T, QueryT, AstT) {
     }
 
     /// Add a WHERE condition.
-    private auto where(string condition) @trusted pure {
+    auto where(string condition) @trusted pure {
         import miniorm.query_ast;
 
         static struct WhereOptional {
@@ -390,6 +389,7 @@ mixin template WhereMixin(T, QueryT, AstT) {
 }
 
 struct Bind {
+    import std.datetime : SysTime;
     import std.range : isOutputRange, put;
 
     alias Key = SumType!(string, int);
@@ -402,6 +402,12 @@ struct Bind {
 
     this(int k) {
         key = Key(k);
+    }
+
+    this(SysTime t) {
+        import miniorm.api : toSqliteDateTime;
+
+        key = Key(toSqliteDateTime(t));
     }
 
     string toString() @safe pure const {

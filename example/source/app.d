@@ -25,21 +25,21 @@ enum schema = buildSchema!(Foo, Bar);
 
 void main() {
     auto db = Miniorm("test.db");
-    db.log = true;
+    db.log = (string v) => writeln(v);
     db.run(schema);
 
     writeln("Foo count: ", db.run(count!Foo));
 
-    foreach (v; db.run(select!Foo.where("text = ", "hello")))
+    foreach (v; db.run(select!Foo.where("text = :hello", Bind("hello")), "hello"))
         writeln(v);
 
     writeln;
 
     writeln("Bar count: ", db.run(count!Bar));
-    foreach (v; db.run(select!Bar.where("value <", 3)))
+    foreach (v; db.run(select!Bar.where("value < 3")))
         writeln(v);
 
-    db.run(delete_!Foo.where("ts <", Clock.currTime));
+    db.run(delete_!Foo.where("ts < :ts", Bind("ts")), Clock.currTime);
 
     db.run(insert!Foo, Foo(0, "hello", Clock.currTime), Foo(20, "world", Clock.currTime));
     db.run(insert!Foo, Foo(0, "hello", Clock.currTime), Foo(0, "world", Clock.currTime));

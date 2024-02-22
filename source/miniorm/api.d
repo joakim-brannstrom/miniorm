@@ -27,8 +27,9 @@ version (unittest) {
 struct Miniorm {
     private LentCntStatement[string] cachedStmt;
     private size_t cacheSize = 128;
-    /// True means that all queries are logged.
-    private bool log_;
+    /// If set then all queries are logged.
+    alias LogFn = void delegate(string);
+    private LogFn log_;
 
     ///
     private Database db;
@@ -62,6 +63,9 @@ struct Miniorm {
     }
 
     RefCntStatement prepare(string sql) {
+        if (log_)
+            log_(sql);
+
         if (cachedStmt.length > cacheSize) {
             auto keys = appender!(string[])();
             foreach (p; cachedStmt.byKeyValue) {
@@ -86,13 +90,13 @@ struct Miniorm {
     }
 
     /// Toggle logging.
-    void log(bool v) nothrow {
+    void log(LogFn v) nothrow {
         this.log_ = v;
     }
 
     /// Returns: True if logging is activated
     private bool isLog() {
-        return log_;
+        return log_ !is null;
     }
 
     private void cleanupCache() {
