@@ -313,8 +313,8 @@ string[] fieldNames(string name, T)(string prefix = "") {
     import std.utf;
 
     assert(fieldNames!("", Bar) == [
-            "'id'", "'abc'", "'foo.id'", "'foo.xx'", "'foo.yy'", "'baz'"
-            ]);
+        "'id'", "'abc'", "'foo.id'", "'foo.xx'", "'foo.yy'", "'baz'"
+    ]);
     assert(fieldToCol!("", Bar).map!"a.quoteIdentifier".array == [
         "'id'", "'abc'", "'foo.id'", "'foo.xx'", "'foo.yy'", "'baz'"
     ]);

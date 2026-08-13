@@ -159,8 +159,8 @@ struct Select {
     SumType!(None, Limit) limit;
 
     mixin(makeAssign!(typeof(this))([
-            "columns", "from", "where", "orderBy", "limit"
-            ]));
+        "columns", "from", "where", "orderBy", "limit"
+    ]));
 
     void toString(Writer)(ref Writer w) if (isOutputRange!(Writer, char)) {
         put(w, "SELECT ");
@@ -739,7 +739,7 @@ unittest {
     // a subquery as a blob that should be represented as-is.
     assert(qblob.Query.Sql.toString == "SELECT * FROM (SELECT * FROM foo I dance);");
     // a subquery as a named select.
-    assert(qAlias.Query.Sql.toString =="SELECT * FROM (SELECT * FROM foo I dance) AS bar;");
+    assert(qAlias.Query.Sql.toString == "SELECT * FROM (SELECT * FROM foo I dance) AS bar;");
     // multiple table refs.
     assert(qRef.Query.Sql.toString == "SELECT * FROM (foo,smurf);");
 }
@@ -762,8 +762,8 @@ unittest {
     // act
     q.from = Blob("foo").From;
     q.where = WhereExpr(Expr("foo = bar"), [
-            WhereExpr.Opt(WhereOp.OR, Expr("batman NOT NULL"))
-            ]).Where;
+        WhereExpr.Opt(WhereOp.OR, Expr("batman NOT NULL"))
+    ]).Where;
     // assert
     assert(q.Query.Sql.toString == "SELECT * FROM foo WHERE foo = bar OR batman NOT NULL;");
 }
@@ -782,8 +782,8 @@ unittest {
     // act
     auto q = Insert(InsertOpt.Insert, TableRef("foo"));
     q.values = InsertValues(Values(Value(Expr("1"), [Expr("2")]), [
-                Value(Expr("4"), [Expr("5")])
-            ]));
+            Value(Expr("4"), [Expr("5")])
+    ]));
     // assert
     assert(q.Query.Sql.toString == "INSERT INTO foo VALUES (1,2),(4,5);");
 }

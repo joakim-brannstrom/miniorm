@@ -90,8 +90,8 @@ unittest {
     }
 
     assert(select!Foo.where("foo = :bar", Bind("bar")).or("batman IS NULL")
-        .and("batman = :hero", Bind("hero")).toSql.toString ==
-                "SELECT * FROM Foo WHERE foo = :bar OR batman IS NULL AND batman = :hero;");
+            .and("batman = :hero", Bind("hero")).toSql.toString
+            == "SELECT * FROM Foo WHERE foo = :bar OR batman IS NULL AND batman = :hero;");
 }
 
 @("shall be possible to have a member of enum type")
@@ -107,7 +107,7 @@ unittest {
     }
 
     assert(select!Foo.where("enum_ = 'robin'")
-        .toSql.toString == "SELECT * FROM Foo WHERE enum_ = 'robin';");
+            .toSql.toString == "SELECT * FROM Foo WHERE enum_ = 'robin';");
 }
 
 auto insert(T)() {
@@ -233,19 +233,23 @@ unittest {
         string version_;
     }
 
-    assert(insertOrReplace!Foo.values(1).toSql.toString ==
-            "INSERT OR REPLACE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?);");
-    assert(insert!Foo.values(1).toSql.toString ==
-            "INSERT INTO Foo ('text','val','ts','version') VALUES (?,?,?,?);");
+    assert(insertOrReplace!Foo.values(1)
+            .toSql.toString
+            == "INSERT OR REPLACE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?);");
+    assert(insert!Foo.values(1)
+            .toSql.toString == "INSERT INTO Foo ('text','val','ts','version') VALUES (?,?,?,?);");
 
-    assert(insertOrReplace!Foo.values(2).toSql.toString ==
-            "INSERT OR REPLACE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
+    assert(insertOrReplace!Foo.values(2)
+            .toSql.toString
+            == "INSERT OR REPLACE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
 
-    assert(insertOrIgnore!Foo.values(2).toSql.toString ==
-            "INSERT OR IGNORE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
+    assert(insertOrIgnore!Foo.values(2)
+            .toSql.toString
+            == "INSERT OR IGNORE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
 
-    assert(insert!Foo.values(2).toSql.toString ==
-            "INSERT INTO Foo ('text','val','ts','version') VALUES (?,?,?,?),(?,?,?,?);");
+    assert(insert!Foo.values(2)
+            .toSql.toString
+            == "INSERT INTO Foo ('text','val','ts','version') VALUES (?,?,?,?),(?,?,?,?);");
 }
 
 unittest {
@@ -262,14 +266,15 @@ unittest {
         Foo foo;
     }
 
-    assert(insertOrReplace!Bar.values(1).toSql.toString ==
-            "INSERT OR REPLACE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
-    assert(insertOrIgnore!Bar.values(1).toSql.toString ==
-            "INSERT OR IGNORE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
-    assert(insert!Bar.values(1).toSql.toString ==
-            "INSERT INTO Bar ('value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?);");
-    assert(insert!Bar.values(3).toSql.toString ==
-            "INSERT INTO Bar ('value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?);");
+    assert(insertOrReplace!Bar.values(1).toSql.toString
+            == "INSERT OR REPLACE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
+    assert(insertOrIgnore!Bar.values(1).toSql.toString
+            == "INSERT OR IGNORE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
+    assert(insert!Bar.values(1)
+            .toSql.toString
+            == "INSERT INTO Bar ('value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?);");
+    assert(insert!Bar.values(3).toSql.toString
+            == "INSERT INTO Bar ('value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?);");
 }
 
 unittest {
@@ -423,7 +428,7 @@ unittest {
     }
 
     assert(delete_!Foo.where("text = privet").and("ts > 123")
-        .toSql.toString == "DELETE FROM Foo WHERE text = privet AND ts > 123;");
+            .toSql.toString == "DELETE FROM Foo WHERE text = privet AND ts > 123;");
 }
 
 auto count(T)() {
@@ -462,6 +467,6 @@ unittest {
         ulong ts;
     }
 
-    assert(count!Foo.where("text = privet").and("ts > 123").toSql.toString ==
-            "SELECT count(*) FROM Foo WHERE text = privet AND ts > 123;");
+    assert(count!Foo.where("text = privet").and("ts > 123")
+            .toSql.toString == "SELECT count(*) FROM Foo WHERE text = privet AND ts > 123;");
 }
