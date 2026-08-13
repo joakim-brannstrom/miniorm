@@ -702,17 +702,13 @@ mixin template makeBuilder(members...) {
     }
 }
 
-version (unittest) {
-    import unit_threaded.assertions : shouldEqual;
-}
-
 // TODO: investigate why this is needed to be system.
 @system:
 
 @("shall convert a query at compile time to SQL")
 unittest {
     enum q = Select().Query.Sql.toString;
-    q.shouldEqual("SELECT * ;");
+    assert(q == "SELECT * ;");
 }
 
 @("shall convert a Select using From to SQL")
@@ -725,7 +721,7 @@ unittest {
     // assert
     immutable expected = "SELECT * FROM foo;";
     foreach (s; [qblob, qtblRef])
-        s.Query.Sql.toString.shouldEqual(expected);
+        assert(s.Query.Sql.toString == expected);
 }
 
 @("shall convert a Select using a subquery in FROM to SQL")
@@ -741,11 +737,11 @@ unittest {
             .TableOrQuery, [TableRef("smurf").TableOrQuery]))).From;
     // assert
     // a subquery as a blob that should be represented as-is.
-    qblob.Query.Sql.toString.shouldEqual("SELECT * FROM (SELECT * FROM foo I dance);");
+    assert(qblob.Query.Sql.toString == "SELECT * FROM (SELECT * FROM foo I dance);");
     // a subquery as a named select.
-    qAlias.Query.Sql.toString.shouldEqual("SELECT * FROM (SELECT * FROM foo I dance) AS bar;");
+    assert(qAlias.Query.Sql.toString =="SELECT * FROM (SELECT * FROM foo I dance) AS bar;");
     // multiple table refs.
-    qRef.Query.Sql.toString.shouldEqual("SELECT * FROM (foo,smurf);");
+    assert(qRef.Query.Sql.toString == "SELECT * FROM (foo,smurf);");
 }
 
 @("shall convert a Select using an OrderBy to SQL")
@@ -756,7 +752,7 @@ unittest {
     // act
     q.orderBy = OrderBy(OrderingTerm(Blob("bar")));
     // assert
-    q.Query.Sql.toString.shouldEqual("SELECT * FROM foo ORDER BY bar;");
+    assert(q.Query.Sql.toString == "SELECT * FROM foo ORDER BY bar;");
 }
 
 @("shall convert a Select using Where to SQL")
@@ -769,7 +765,7 @@ unittest {
             WhereExpr.Opt(WhereOp.OR, Expr("batman NOT NULL"))
             ]).Where;
     // assert
-    q.Query.Sql.toString.shouldEqual("SELECT * FROM foo WHERE foo = bar OR batman NOT NULL;");
+    assert(q.Query.Sql.toString == "SELECT * FROM foo WHERE foo = bar OR batman NOT NULL;");
 }
 
 @("shall convert an Insert using default values to SQL")
@@ -778,7 +774,7 @@ unittest {
     auto q = Insert(InsertOpt.Insert, TableRef("foo"));
     q.values = InsertValues(InsertDefaultValue.init);
     // assert
-    q.Query.Sql.toString.shouldEqual("INSERT INTO foo DEFAULT VALUES;");
+    assert(q.Query.Sql.toString == "INSERT INTO foo DEFAULT VALUES;");
 }
 
 @("shall convert an Insert using specific values to SQL")
@@ -789,7 +785,7 @@ unittest {
                 Value(Expr("4"), [Expr("5")])
             ]));
     // assert
-    q.Query.Sql.toString.shouldEqual("INSERT INTO foo VALUES (1,2),(4,5);");
+    assert(q.Query.Sql.toString == "INSERT INTO foo VALUES (1,2),(4,5);");
 }
 
 @("shall convert an Insert using select stmt to SQL")
@@ -800,7 +796,7 @@ unittest {
     auto q = Insert(InsertOpt.Insert, TableRef("foo"));
     q.values = InsertValues(s);
     // assert
-    q.Query.Sql.toString.shouldEqual("INSERT INTO foo SELECT * FROM bar;");
+    assert(q.Query.Sql.toString == "INSERT INTO foo SELECT * FROM bar;");
 }
 
 @("shall convert a Select with a limit to SQL")
@@ -811,5 +807,5 @@ unittest {
     // act
     q.limit = Limit(Blob("10"), LimitOffset(Blob("42")));
     // assert
-    q.Query.Sql.toString.shouldEqual("SELECT * FROM foo LIMIT 10 OFFSET 42;");
+    assert(q.Query.Sql.toString == "SELECT * FROM foo LIMIT 10 OFFSET 42;");
 }

@@ -8,7 +8,6 @@ targetPath "build"
 targetType "library"
 
 dependency "d2sqlite3" version="~>1.0.0"
-dependency "unit-threaded" version="~>2.1.9"
 
 configuration "with-lib" {
     subConfiguration "d2sqlite3" "with-lib"
@@ -20,11 +19,4 @@ configuration "all-included" {
 
 configuration "without-lib" {
     subConfiguration "d2sqlite3" "without-lib"
-}
-
-configuration "unittest" {
-    targetType "executable"
-    mainSourceFile "build/ut.d"
-    preBuildCommands "dub run unit-threaded -c gen_ut_main -- -f build/ut.d"
-    excludedSourceFiles "source/app.d"
 }

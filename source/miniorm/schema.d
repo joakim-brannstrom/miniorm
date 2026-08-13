@@ -9,7 +9,7 @@ module miniorm.schema;
 
 version (unittest) {
     import std.algorithm : map;
-    import unit_threaded.assertions;
+    import std.array : array;
 }
 
 @safe:
@@ -102,7 +102,7 @@ unittest {
         ulong ts;
     }
 
-    buildSchema!(Foo, Bar).shouldEqual(`CREATE TABLE IF NOT EXISTS Foo (
+    assert(buildSchema!(Foo, Bar) == `CREATE TABLE IF NOT EXISTS Foo (
 'id' INTEGER PRIMARY KEY,
 'value' REAL NOT NULL,
 'ts' INTEGER NOT NULL);
@@ -133,7 +133,7 @@ unittest {
         ulong int_;
     }
 
-    buildSchema!(Foo).shouldEqual(`CREATE TABLE IF NOT EXISTS Foo (
+    assert(buildSchema!(Foo) == `CREATE TABLE IF NOT EXISTS Foo (
 'id' INTEGER PRIMARY KEY,
 'int_' INTEGER);
 `);
@@ -190,7 +190,7 @@ unittest {
         ulong id;
     }
 
-    buildSchema!Foo("new_").shouldEqual(`CREATE TABLE IF NOT EXISTS new_my_table (
+    assert(buildSchema!Foo("new_") == `CREATE TABLE IF NOT EXISTS new_my_table (
 'id' INTEGER PRIMARY KEY);
 `);
 }
@@ -204,7 +204,7 @@ unittest {
         SysTime timestamp;
     }
 
-    buildSchema!Foo.shouldEqual(`CREATE TABLE IF NOT EXISTS Foo (
+    assert(buildSchema!Foo == `CREATE TABLE IF NOT EXISTS Foo (
 'id' INTEGER PRIMARY KEY,
 'timestamp' DATETIME NOT NULL);
 `);
@@ -220,7 +220,7 @@ unittest {
         string key;
     }
 
-    buildSchema!Foo.shouldEqual(`CREATE TABLE IF NOT EXISTS Foo (
+    assert(buildSchema!Foo == `CREATE TABLE IF NOT EXISTS Foo (
 'id' INTEGER NOT NULL,
 'key' TEXT PRIMARY KEY);
 `);
@@ -295,7 +295,7 @@ string[] fieldNames(string name, T)(string prefix = "") {
 }
 
 @("shall derive the field names from the inspected struct")
-unittest {
+@system unittest {
     struct Foo {
         ulong id;
         float xx;
@@ -315,9 +315,9 @@ unittest {
     assert(fieldNames!("", Bar) == [
             "'id'", "'abc'", "'foo.id'", "'foo.xx'", "'foo.yy'", "'baz'"
             ]);
-    fieldToCol!("", Bar).map!"a.quoteIdentifier".shouldEqual([
-            "'id'", "'abc'", "'foo.id'", "'foo.xx'", "'foo.yy'", "'baz'"
-            ]);
+    assert(fieldToCol!("", Bar).map!"a.quoteIdentifier".array == [
+        "'id'", "'abc'", "'foo.id'", "'foo.xx'", "'foo.yy'", "'baz'"
+    ]);
 }
 
 struct FieldColumn {
@@ -446,7 +446,7 @@ FieldColumn[] fieldToColInternal(string name, string primaryKey, T, ulong depth,
     }
 }
 
-unittest {
+@system unittest {
     struct Baz {
         string a, b;
     }
@@ -468,11 +468,10 @@ unittest {
 
     enum shouldWorkAtCompileTime = fieldToCol!("", Bar);
 
-    fieldToCol!("", Bar)().map!"a.toColumn".shouldEqual([
-            "'id' INTEGER PRIMARY KEY", "'abc' REAL NOT NULL",
-            "'foo.xx' REAL NOT NULL", "'foo.yy' TEXT NOT NULL",
-            "'foo.baz.a' TEXT NOT NULL", "'foo.baz.b' TEXT NOT NULL",
-            "'foo.zz' INTEGER NOT NULL", "'baz' TEXT NOT NULL",
-            "'data' BLOB NOT NULL"
-            ]);
+    assert(fieldToCol!("", Bar)().map!"a.toColumn".array == [
+        "'id' INTEGER PRIMARY KEY", "'abc' REAL NOT NULL",
+        "'foo.xx' REAL NOT NULL", "'foo.yy' TEXT NOT NULL",
+        "'foo.baz.a' TEXT NOT NULL", "'foo.baz.b' TEXT NOT NULL",
+        "'foo.zz' INTEGER NOT NULL", "'baz' TEXT NOT NULL", "'data' BLOB NOT NULL"
+    ]);
 }

@@ -17,10 +17,6 @@ public import miniorm.query_ast : OrderingTermSort, InsertOpt;
 
 debug (miniorm) import std.stdio : stderr;
 
-version (unittest) {
-    import unit_threaded.assertions;
-}
-
 auto select(T)() {
     return Select!T(tableName!T);
 }
@@ -93,9 +89,9 @@ unittest {
         ulong ts;
     }
 
-    select!Foo.where("foo = :bar", Bind("bar")).or("batman IS NULL")
-        .and("batman = :hero", Bind("hero")).toSql.toString.shouldEqual(
-            "SELECT * FROM Foo WHERE foo = :bar OR batman IS NULL AND batman = :hero;");
+    assert(select!Foo.where("foo = :bar", Bind("bar")).or("batman IS NULL")
+        .and("batman = :hero", Bind("hero")).toSql.toString ==
+                "SELECT * FROM Foo WHERE foo = :bar OR batman IS NULL AND batman = :hero;");
 }
 
 @("shall be possible to have a member of enum type")
@@ -110,8 +106,8 @@ unittest {
         MyEnum enum_;
     }
 
-    select!Foo.where("enum_ = 'robin'")
-        .toSql.toString.shouldEqual("SELECT * FROM Foo WHERE enum_ = 'robin';");
+    assert(select!Foo.where("enum_ = 'robin'")
+        .toSql.toString == "SELECT * FROM Foo WHERE enum_ = 'robin';");
 }
 
 auto insert(T)() {
@@ -237,18 +233,18 @@ unittest {
         string version_;
     }
 
-    insertOrReplace!Foo.values(1).toSql.toString.shouldEqual(
+    assert(insertOrReplace!Foo.values(1).toSql.toString ==
             "INSERT OR REPLACE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?);");
-    insert!Foo.values(1).toSql.toString.shouldEqual(
+    assert(insert!Foo.values(1).toSql.toString ==
             "INSERT INTO Foo ('text','val','ts','version') VALUES (?,?,?,?);");
 
-    insertOrReplace!Foo.values(2).toSql.toString.shouldEqual(
+    assert(insertOrReplace!Foo.values(2).toSql.toString ==
             "INSERT OR REPLACE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
 
-    insertOrIgnore!Foo.values(2).toSql.toString.shouldEqual(
+    assert(insertOrIgnore!Foo.values(2).toSql.toString ==
             "INSERT OR IGNORE INTO Foo ('id','text','val','ts','version') VALUES (?,?,?,?,?),(?,?,?,?,?);");
 
-    insert!Foo.values(2).toSql.toString.shouldEqual(
+    assert(insert!Foo.values(2).toSql.toString ==
             "INSERT INTO Foo ('text','val','ts','version') VALUES (?,?,?,?),(?,?,?,?);");
 }
 
@@ -266,13 +262,13 @@ unittest {
         Foo foo;
     }
 
-    insertOrReplace!Bar.values(1).toSql.toString.shouldEqual(
+    assert(insertOrReplace!Bar.values(1).toSql.toString ==
             "INSERT OR REPLACE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
-    insertOrIgnore!Bar.values(1).toSql.toString.shouldEqual(
+    assert(insertOrIgnore!Bar.values(1).toSql.toString ==
             "INSERT OR IGNORE INTO Bar ('id','value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?,?);");
-    insert!Bar.values(1).toSql.toString.shouldEqual(
+    assert(insert!Bar.values(1).toSql.toString ==
             "INSERT INTO Bar ('value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?);");
-    insert!Bar.values(3).toSql.toString.shouldEqual(
+    assert(insert!Bar.values(3).toSql.toString ==
             "INSERT INTO Bar ('value','foo.id','foo.text','foo.val','foo.ts') VALUES (?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?);");
 }
 
@@ -295,7 +291,7 @@ unittest {
         float w;
     }
 
-    insertOrReplace!Baz.values(1).toSql.toString.shouldEqual("INSERT OR REPLACE INTO Baz ('id','v','xyz.v','xyz.foo.text','xyz.foo.val','xyz.foo.ts','w') VALUES (?,?,?,?,?,?,?);");
+    assert(insertOrReplace!Baz.values(1).toSql.toString == "INSERT OR REPLACE INTO Baz ('id','v','xyz.v','xyz.foo.text','xyz.foo.val','xyz.foo.ts','w') VALUES (?,?,?,?,?,?,?);");
 }
 
 auto delete_(T)() {
@@ -328,6 +324,7 @@ struct Delete(T) {
 }
 
 mixin template WhereMixin(T, QueryT, AstT) {
+    import std.datetime : SysTime;
     import std.traits : isNumeric, isSomeString;
 
     Bind[] binds;
@@ -343,7 +340,7 @@ mixin template WhereMixin(T, QueryT, AstT) {
     }
 
     /// Add a WHERE condition.
-    auto where(string condition) @trusted pure {
+    private auto where(string condition) @trusted pure {
         import miniorm.query_ast;
 
         static struct WhereOptional {
@@ -389,7 +386,6 @@ mixin template WhereMixin(T, QueryT, AstT) {
 }
 
 struct Bind {
-    import std.datetime : SysTime;
     import std.range : isOutputRange, put;
 
     alias Key = SumType!(string, int);
@@ -402,12 +398,6 @@ struct Bind {
 
     this(int k) {
         key = Key(k);
-    }
-
-    this(SysTime t) {
-        import miniorm.api : toSqliteDateTime;
-
-        key = Key(toSqliteDateTime(t));
     }
 
     string toString() @safe pure const {
@@ -432,8 +422,8 @@ unittest {
         ulong ts;
     }
 
-    delete_!Foo.where("text = privet").and("ts > 123")
-        .toSql.toString.shouldEqual("DELETE FROM Foo WHERE text = privet AND ts > 123;");
+    assert(delete_!Foo.where("text = privet").and("ts > 123")
+        .toSql.toString == "DELETE FROM Foo WHERE text = privet AND ts > 123;");
 }
 
 auto count(T)() {
@@ -442,7 +432,6 @@ auto count(T)() {
 
 struct Count(T) {
     static import miniorm.query_ast;
-    import miniorm.query_ast : Sql;
 
     Select!T query_;
 
@@ -455,7 +444,7 @@ struct Count(T) {
     }
 
     /// Convert to a SQL statement that can e.g. be pretty printed.
-    Sql toSql() {
+    miniorm.query_ast.Sql toSql() {
         return query_.toSql;
     }
 
@@ -473,6 +462,6 @@ unittest {
         ulong ts;
     }
 
-    count!Foo.where("text = privet").and("ts > 123").toSql.toString.shouldEqual(
+    assert(count!Foo.where("text = privet").and("ts > 123").toSql.toString ==
             "SELECT count(*) FROM Foo WHERE text = privet AND ts > 123;");
 }

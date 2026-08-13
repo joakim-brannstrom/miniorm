@@ -20,16 +20,14 @@ import d2sqlite3;
 
 version (unittest) {
     import std.algorithm : map;
-    import unit_threaded.assertions;
 }
 
 ///
 struct Miniorm {
     private LentCntStatement[string] cachedStmt;
     private size_t cacheSize = 128;
-    /// If set then all queries are logged.
-    alias LogFn = void delegate(string);
-    private LogFn log_;
+    /// True means that all queries are logged.
+    private bool log_;
 
     ///
     private Database db;
@@ -39,12 +37,10 @@ struct Miniorm {
         return db;
     }
 
-    ///
     this(Database db) {
         this.db = db;
     }
 
-    ///
     this(string path, int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) {
         this(Database(path, flags));
     }
@@ -64,8 +60,7 @@ struct Miniorm {
 
     RefCntStatement prepare(string sql) {
         if (log_)
-            log_(sql);
-
+            logger.trace("miniorm.prepare ", sql);
         if (cachedStmt.length > cacheSize) {
             auto keys = appender!(string[])();
             foreach (p; cachedStmt.byKeyValue) {
@@ -90,13 +85,13 @@ struct Miniorm {
     }
 
     /// Toggle logging.
-    void log(LogFn v) nothrow {
+    void log(bool v) nothrow {
         this.log_ = v;
     }
 
     /// Returns: True if logging is activated
     private bool isLog() {
-        return log_ !is null;
+        return log_;
     }
 
     private void cleanupCache() {
@@ -108,6 +103,7 @@ struct Miniorm {
 
     void opAssign(ref typeof(this) rhs) {
         cleanupCache;
+        log_ = rhs.log_;
         db = rhs.db;
     }
 
@@ -286,8 +282,6 @@ version (unittest) {
     import std.datetime;
     import std.array;
     import std.stdio;
-
-    import unit_threaded.assertions;
 }
 
 @("shall operate on a database allocted in std.experimental.allocators without any errors")
@@ -313,20 +307,20 @@ unittest {
     auto db = Miniorm(":memory:");
     db.run(buildSchema!One);
     db.run(insert!One.insert, iota(0, 10).map!(i => One(i * 100, "hello" ~ text(i))));
-    db.run(count!One).shouldEqual(10);
+    assert(db.run(count!One) == 10);
 
     auto ones = db.run(select!One).array;
-    ones.length.shouldEqual(10);
+    assert(ones.length == 10);
     assert(ones.all!(a => a.id < 100));
-    db.getUnderlyingDb.lastInsertRowid.shouldEqual(ones[$ - 1].id);
+    assert(db.getUnderlyingDb.lastInsertRowid == ones[$ - 1].id);
 
     db.run(delete_!One);
-    db.run(count!One).shouldEqual(0);
+    assert(db.run(count!One) == 0);
     db.run(insertOrReplace!One, iota(0, 499).map!(i => One((i + 1) * 100, "hello" ~ text(i))));
     ones = db.run(select!One).array;
-    ones.length.shouldEqual(499);
+    assert(ones.length == 499);
     assert(ones.all!(a => a.id >= 100));
-    db.lastInsertRowid.shouldEqual(ones[$ - 1].id);
+    assert(db.lastInsertRowid == ones[$ - 1].id);
 }
 
 @("shall insert and extract datetime from the table")
@@ -348,8 +342,8 @@ unittest {
     db.run(insert!One.insert, One(0, Clock.currTime));
 
     auto ones = db.run(select!One).array;
-    ones.length.shouldEqual(1);
-    ones[0].time.shouldBeGreaterThan(time);
+    assert(ones.length == 1);
+    assert(ones[0].time > time);
 }
 
 unittest {
@@ -361,9 +355,9 @@ unittest {
     auto db = Miniorm(":memory:");
     db.run(buildSchema!One);
 
-    db.run(count!One).shouldEqual(0);
+    assert(db.run(count!One) == 0);
     db.run(insert!One.insert, iota(0, 10).map!(i => One(i * 100, "hello" ~ text(i))));
-    db.run(count!One).shouldEqual(10);
+    assert(db.run(count!One) == 10);
 
     auto ones = db.run(select!One).array;
     assert(ones.length == 10);
@@ -371,10 +365,7 @@ unittest {
     assert(db.lastInsertRowid == ones[$ - 1].id);
 
     db.run(delete_!One);
-    db.run(count!One).shouldEqual(0);
-
-    import std.datetime;
-    import std.conv : to;
+    assert(db.run(count!One) == 0);
 
     db.run(insertOrReplace!One, iota(0, 499).map!(i => One((i + 1) * 100, "hello" ~ text(i))));
     ones = db.run(select!One).array;
@@ -401,8 +392,8 @@ unittest {
     db.run(insert!Foo.insert, Foo(0, Foo.MyEnum.bar));
     auto res = db.run(select!Foo).array;
 
-    res.length.shouldEqual(1);
-    res[0].enum_.shouldEqual(Foo.MyEnum.bar);
+    assert(res.length == 1);
+    assert(res[0].enum_ == Foo.MyEnum.bar);
 }
 
 unittest {
@@ -432,8 +423,8 @@ unittest {
     assert(db.run(count!Settings) == 3);
     assert(db.run(count!Settings.where(`"limits.volt.max" = :nr`, Bind("nr")), 2) == 1);
     assert(db.run(count!Settings.where(`"limits.volt.max" > :nr`, Bind("nr")), 10) == 2);
-    db.run(count!Settings.where(`"limits.volt.max" > :nr`, Bind("nr"))
-            .and(`"limits.volt.max" < :topnr`, Bind("topnr")), 1, 12).shouldEqual(2);
+    assert(db.run(count!Settings.where(`"limits.volt.max" > :nr`, Bind("nr"))
+            .and(`"limits.volt.max" < :topnr`, Bind("topnr")), 1, 12) == 2);
 
     db.run(delete_!Settings.where(`"limits.volt.max" < :nr`, Bind("nr")), 10);
     assert(db.run(count!Settings) == 2);
@@ -591,9 +582,10 @@ struct RefCntStatement {
     static struct Payload {
         LentCntStatement* stmt;
 
-        this(LentCntStatement* stmt) {
+        this(LentCntStatement* stmt)
+        in (stmt !is null) {
             this.stmt = stmt;
-            stmt.count++;
+            this.stmt.count++;
         }
 
         ~this() nothrow {
@@ -604,6 +596,7 @@ struct RefCntStatement {
                 (*stmt).stmt.clearBindings;
                 (*stmt).stmt.reset;
             } catch (Exception e) {
+                logger.info(e.msg).collectException;
             }
             stmt.count--;
             stmt = null;
@@ -660,27 +653,27 @@ unittest {
         auto s0 = db.prepare("select * from Settings");
         auto s1 = db.prepare("select * from Settings");
 
-        db.cachedStmt.length.shouldEqual(1);
-        db.cachedStmt["select * from Settings"].count.shouldEqual(2);
+        assert(db.cachedStmt.length == 1);
+        assert(db.cachedStmt["select * from Settings"].count == 2);
     }
-    db.cachedStmt.length.shouldEqual(1);
-    db.cachedStmt["select * from Settings"].count.shouldEqual(0);
+    assert(db.cachedStmt.length == 1);
+    assert(db.cachedStmt["select * from Settings"].count == 0);
 
     { // a lent statement is not removed when the cache is full
         auto s0 = db.prepare("select * from Settings");
         auto s1 = db.prepare("select id from Settings");
 
-        db.cachedStmt.length.shouldEqual(2);
-        ("select * from Settings" in db.cachedStmt).shouldBeTrue;
-        ("select id from Settings" in db.cachedStmt).shouldBeTrue;
+        assert(db.cachedStmt.length == 2);
+        assert("select * from Settings" in db.cachedStmt);
+        assert("select id from Settings" in db.cachedStmt);
     }
-    db.cachedStmt.length.shouldEqual(2);
+    assert(db.cachedStmt.length == 2);
 
     { // statements not lent to a user is removed when the cache is full
         auto s0 = db.prepare("select * from Settings");
 
-        db.cachedStmt.length.shouldEqual(1);
-        ("select * from Settings" in db.cachedStmt).shouldBeTrue;
-        ("select id from Settings" in db.cachedStmt).shouldBeFalse;
+        assert(db.cachedStmt.length == 1);
+        assert("select * from Settings" in db.cachedStmt);
+        assert("select id from Settings" !in db.cachedStmt);
     }
 }
